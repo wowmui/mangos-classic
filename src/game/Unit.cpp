@@ -3539,16 +3539,25 @@ void Unit::_UpdateAutoRepeatSpell()
     if ((GetTypeId() == TYPEID_PLAYER && ((Player*)this)->isMoving()) || IsNonMeleeSpellCasted(false, false, true))
     {
         // cancel wand shoot
-        if (m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->m_spellInfo->Category == 351)
-            InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
-        m_AutoRepeatFirstCast = true;
-        return;
+		if (m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->m_spellInfo->Category == 351)
+		{
+			InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
+			m_AutoRepeatFirstCast = true;
+			return;
+		}
+		else
+			m_AutoRepeatFirstCast = true;
     }
 
     Unit* target = GetMap()->GetUnit(GetTargetGuid());
 
-    if (!target)
-        return;
+	if (!target)
+	{
+		InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
+		return;
+	}
+	if (target != m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->m_targets.getUnitTarget())
+		m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->m_targets.setUnitTarget(target);
 
     // apply delay
     if (m_AutoRepeatFirstCast && getAttackTimer(RANGED_ATTACK) < 500)
@@ -3556,20 +3565,27 @@ void Unit::_UpdateAutoRepeatSpell()
     m_AutoRepeatFirstCast = false;
 
     // castroutine
-    if (isAttackReady(RANGED_ATTACK))
+    if (isAttackReady(RANGED_ATTACK) && !((Player*)this)->isMoving())
     {
-        // we want to shoot
-        Spell* spell = new Spell(this, m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->m_spellInfo, TRIGGERED_OLD_TRIGGERED);
+		if (m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->CheckCast(true) == SPELL_CAST_OK)
+		{
+			// Always stand before shooting, at least players
+			if (GetTypeId() == TYPEID_PLAYER && getStandState() != UNIT_STAND_STATE_STAND)
+				SetStandState(UNIT_STAND_STATE_STAND);
 
-        SpellCastTargets targets;
-        targets.setUnitTarget(target);
-
-        // Check if able to cast
-        if (spell->SpellStart(&targets) != SPELL_CAST_OK)
-        {
-            InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
-            return;
-        }
+			Spell* spell = new Spell(this, m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->m_spellInfo, TRIGGERED_OLD_TRIGGERED);
+			// Check if able to cast
+			if (spell->SpellStart(&(m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->m_targets)) != SPELL_CAST_OK)
+			{
+				InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
+				return;
+			}
+		}
+		else
+		{
+			InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
+			return;
+		}
 
         // all went good, reset attack
         resetAttackTimer(RANGED_ATTACK);
